@@ -35,7 +35,7 @@ for system in systems_json:
     name = systems_json[i]["system_id"]
     cur.execute("SELECT solarSystemName FROM mapSolarSystems WHERE solarSystemID=?", (name,))
     name = cur.fetchone() 
-    sys_id.append(str(name))
+    sys_id.append(name[0])
     npc_kills.append(systems_json[i]["npc_kills"])
     i += 1
 
@@ -51,7 +51,15 @@ out = dict(itertools.islice(sorted_dict.items(), N))
 
 top25 = sorted(out.items(), key=operator.itemgetter(1), reverse=True)
 
+
+
 for k,v in top25:
-    string = k + " - " + str(v)
+    #I fixed the output issue that was blocking me from adding a region to each line
+    cur.execute("SELECT regionID FROM mapSolarSystems WHERE solarSystemName=?", (k,))
+    regionID = cur.fetchone()
+    cur.execute("SELECT regionName FROM mapRegions WHERE regionID=?", (regionID[0],))
+    regionName = cur.fetchone()
+
+    string = regionName[0] + " - " + k + " - " + str(v)
     #string = string.strip('()')
-    pprint(string)
+    pprint(string.format())
