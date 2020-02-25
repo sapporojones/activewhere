@@ -2,6 +2,7 @@
 # add options for more data retrieval later
 
 #imports
+import re
 import requests
 import sqlite3
 import json
@@ -33,12 +34,14 @@ i = 0
 for system in systems_json:
     name = systems_json[i]["system_id"]
     cur.execute("SELECT solarSystemName FROM mapSolarSystems WHERE solarSystemID=?", (name,))
-    name = cur.fetchall() 
+    name = cur.fetchone() 
     sys_id.append(str(name))
     npc_kills.append(systems_json[i]["npc_kills"])
     i += 1
 
 master_dict = {sys_id[i]: npc_kills[i] for i in range(len(sys_id))} 
+
+#format the dicts and return top N systems
 
 N = 50
 
@@ -48,7 +51,7 @@ out = dict(itertools.islice(sorted_dict.items(), N))
 
 top25 = sorted(out.items(), key=operator.itemgetter(1), reverse=True)
 
-#max_len = max([len(v) for v in top25.values()])
-padding = 4
 for k,v in top25:
-    print('{k:3s} {v:{v_len:d}s}'.format(v_len=25+padding, v=str(v), k=str(k)))
+    string = k + " - " + str(v)
+    #string = string.strip('()')
+    pprint(string)
