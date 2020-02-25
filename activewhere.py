@@ -8,8 +8,16 @@ import sqlite3
 import json
 import operator
 import itertools
+import texttable as tt
 from pprint import pprint
 from operator import itemgetter
+###############################################################################
+#Master Variables that the user can change
+#Number of results to return:
+N = 5
+#System to start routing from (must appear exactly as it does in game):
+origin = "D-PNP9"
+##############################################################################
 
 #in case of unexpected CCP URL change fix this
 base_system_url = "https://esi.evetech.net/latest/universe/system_kills/?datasource=tranquility"
@@ -20,6 +28,10 @@ base_system_url = "https://esi.evetech.net/latest/universe/system_kills/?datasou
 database = r"sqlite-latest.sqlite"
 conn = sqlite3.connect(database)
 cur = conn.cursor()
+
+cur.execute("SELECT solarSystemID FROM mapSolarSystems WHERE solarSystemName=?", (origin,))
+originID = cur.fetchone()
+originID = originID[0]
 
 #get eve esi response and convert to json object
 system_data = requests.get(base_system_url)
@@ -43,23 +55,34 @@ master_dict = {sys_id[i]: npc_kills[i] for i in range(len(sys_id))}
 
 #format the dicts and return top N systems
 
-N = 50
-
 sorted_dict = {k: v for k, v in sorted(master_dict.items(), key=lambda x: x[1], reverse=True)}
 
 out = dict(itertools.islice(sorted_dict.items(), N))
 
 top25 = sorted(out.items(), key=operator.itemgetter(1), reverse=True)
 
-
-
+#Table format prep
+numjum = "Number of Jumps from " + str(origin)
+tab = tt.Texttable()
+headings = ["Region Name","System Name","NPC Kills last 60 Mins",numjum]
+tab.header(headings)
+print(f"Showing results for {N} systems:")
+#loop through values in our combined dict, resolve system names, report region
+#names and do some route planning to show number of jumps from d-pnp9
 for k,v in top25:
-    #I fixed the output issue that was blocking me from adding a region to each line
     cur.execute("SELECT regionID FROM mapSolarSystems WHERE solarSystemName=?", (k,))
     regionID = cur.fetchone()
     cur.execute("SELECT regionName FROM mapRegions WHERE regionID=?", (regionID[0],))
     regionName = cur.fetchone()
+    cur.execute("SELECT solarSystemID FROM mapSolarSystems WHERE solarSystemName=?", (k,))
+    destiID = cur.fetchone()
+    URLstring = "https://esi.evetech.net/latest/route/" + str(originID) + "/" + str(destiID[0]) + "/?datasource=tranquility&flag=shortest"
+    get_route_json = requests.get(URLstring)
+    load_route_json = get_route_json.json()
+    i = 0
+    for hop in load_route_json:
+        i += 1
+    tab.add_row([regionName[0],k,str(v),str(i)])
 
-    string = regionName[0] + " - " + k + " - " + str(v)
-    #string = string.strip('()')
-    pprint(string.format())
+s = tab.draw()
+print(s)
