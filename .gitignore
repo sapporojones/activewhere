@@ -1,1 +1,8 @@
 sqlite*
+README.rst
+eve_activewhere.egg-info/
+eve_activewhere/
+poetry.lock
+pyproject.toml
+tests/
+
