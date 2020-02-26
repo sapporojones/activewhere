@@ -14,9 +14,13 @@ from operator import itemgetter
 ###############################################################################
 #Master Variables that the user can change
 #Number of results to return:
-N = 5
+N = 25
 #System to start routing from (must appear exactly as it does in game):
 origin = "D-PNP9"
+#Change the below variable to anything but zero to have the script determine 
+#what is within 20j of the system defined as 'origin'
+J = 0
+
 ##############################################################################
 
 #in case of unexpected CCP URL change fix this
@@ -25,6 +29,7 @@ base_system_url = "https://esi.evetech.net/latest/universe/system_kills/?datasou
 #eve sde connect boilerplate - assumes SQLITE SDE is in same directory as this python script
 #if not you should fix that cause I'm not changing this
 #download latest EVE SDE from https://www.fuzzwork.co.uk/dump/sqlite-latest.sqlite.bz2  
+print("\nConnecting to local database and requesting/parsing EVE ESI data...")
 database = r"sqlite-latest.sqlite"
 conn = sqlite3.connect(database)
 cur = conn.cursor()
@@ -66,7 +71,8 @@ numjum = "Number of Jumps from " + str(origin)
 tab = tt.Texttable()
 headings = ["Region Name","System Name","NPC Kills last 60 Mins",numjum]
 tab.header(headings)
-print(f"Showing results for {N} systems:")
+tab.set_deco(tab.HEADER)
+print(f"Building report for {N} systems...")
 #loop through values in our combined dict, resolve system names, report region
 #names and do some route planning to show number of jumps from d-pnp9
 for k,v in top25:
@@ -85,4 +91,4 @@ for k,v in top25:
     tab.add_row([regionName[0],k,str(v),str(i)])
 
 s = tab.draw()
-print(s)
+print(f"\n\n\n{s}")
