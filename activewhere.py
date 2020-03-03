@@ -2,25 +2,17 @@
 # add options for more data retrieval later
 
 #imports
-import re
 import requests
 import sqlite3
 import json
 import operator
 import itertools
-import texttable as tt
-from pprint import pprint
+import pandas as pd
 from operator import itemgetter
 ###############################################################################
 #Master Variables that the user can change
-#Number of results to return:
-N = 25
 #System to start routing from (must appear exactly as it does in game):
-origin = "D-PNP9"
-#Change the below variable to anything but zero to have the script determine 
-#what is within 20j of the system defined as 'origin'
-J = 0
-
+origin = "Jita"
 ##############################################################################
 
 #in case of unexpected CCP URL change fix this
@@ -38,9 +30,10 @@ cur.execute("SELECT solarSystemID FROM mapSolarSystems WHERE solarSystemName=?",
 originID = cur.fetchone()
 originID = originID[0]
 
-#get eve esi response and convert to json object
+print("Getting system data json...")
 system_data = requests.get(base_system_url)
 systems_json = system_data.json()
+
 
 #make 2 lists at the same time in the same for loop that we can then convert to a dict of key value pairs
 #where the key is the systemID and the value is the npc kills
@@ -55,40 +48,57 @@ for system in systems_json:
     sys_id.append(name[0])
     npc_kills.append(systems_json[i]["npc_kills"])
     i += 1
-
+print("Looped through system ids, creating dictionary...")
 master_dict = {sys_id[i]: npc_kills[i] for i in range(len(sys_id))} 
 
-#format the dicts and return top N systems
-
-sorted_dict = {k: v for k, v in sorted(master_dict.items(), key=lambda x: x[1], reverse=True)}
-
-out = dict(itertools.islice(sorted_dict.items(), N))
-
-top25 = sorted(out.items(), key=operator.itemgetter(1), reverse=True)
-
-#Table format prep
-numjum = "Number of Jumps from " + str(origin)
-tab = tt.Texttable()
-headings = ["Region Name","System Name","NPC Kills last 60 Mins",numjum]
-tab.header(headings)
-tab.set_deco(tab.HEADER)
-print(f"Building report for {N} systems...")
-#loop through values in our combined dict, resolve system names, report region
-#names and do some route planning to show number of jumps from d-pnp9
-for k,v in top25:
-    cur.execute("SELECT regionID FROM mapSolarSystems WHERE solarSystemName=?", (k,))
+#playing with pandas instead of attempting to sort dicts seems smart here
+df = pd.Series(master_dict)
+df.index.name = 'System'
+region_list = []
+print("Creating region name list...")
+for key in master_dict:
+    cur.execute("SELECT regionID FROM mapSolarSystems WHERE solarSystemName=?", (key,))
     regionID = cur.fetchone()
     cur.execute("SELECT regionName FROM mapRegions WHERE regionID=?", (regionID[0],))
     regionName = cur.fetchone()
-    cur.execute("SELECT solarSystemID FROM mapSolarSystems WHERE solarSystemName=?", (k,))
+    region_list.append(regionName[0])
+
+print("Creating presorted master dataframe...")
+pddata = { 'Region': region_list, 'System': sys_id, 'Kills': npc_kills, }
+
+df1 = pd.DataFrame(pddata)
+
+jumps = []
+region = []
+system = []
+npcs = []
+print("Sorting by kills and obtaining routing data from origin system specified to top 30 systems...")
+df1.sort_values(by=['Kills'], ascending=False, inplace=True)
+for item in df1.head(30).itertuples():
+    region.append(item.Region)
+    system.append(item.System)
+    npcs.append(item.Kills)
+    sys = item.System
+    cur.execute("SELECT solarSystemID FROM mapSolarSystems WHERE solarSystemName=?", (sys,))
     destiID = cur.fetchone()
     URLstring = "https://esi.evetech.net/latest/route/" + str(originID) + "/" + str(destiID[0]) + "/?datasource=tranquility&flag=shortest"
     get_route_json = requests.get(URLstring)
     load_route_json = get_route_json.json()
-    i = 0
-    for hop in load_route_json:
-        i += 1
-    tab.add_row([regionName[0],k,str(v),str(i)])
+    i = len(load_route_json)
+    jumps.append(i)
 
-s = tab.draw()
-print(f"\n\n\n{s}")
+
+finaldata = { "Region": region, "System": system, "NPC Kills": npcs, "Jumps": jumps, }
+print("Inserting jump data to short dataframe...")
+newframe = pd.DataFrame(finaldata)
+newframe.assign(region=region)
+newframe.assign(system=system)
+newframe.assign(kills=npcs)
+newframe.assign(jumps=jumps)
+newframe.reset_index()
+
+print("\n\n\nSorted by npc kills:")
+print(newframe.to_string(index=False))
+newframe.sort_values(by='Jumps', ascending=True, inplace=True)
+print("\n\nSorted by jumps from origin system:")
+print(newframe.to_string(index=False))
